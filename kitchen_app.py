@@ -92,9 +92,7 @@ def login_page():
 
             except Exception as e:
 
-                st.error(
-                    "Login failed. Check your email and password."
-                )
+                st.error(f"Login failed: {e}")
 
 
     # ----------------------------------------------
@@ -153,9 +151,7 @@ def login_page():
 
                 except Exception as e:
 
-                    st.error(
-                        "Could not create the account."
-                    )
+                     st.error(f"Could not create the account: {e}")
 
 
 # ==================================================

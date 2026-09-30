@@ -631,7 +631,7 @@ def shopping_list_page(user):
         return
 
     # ========================================================
-    # SPLIT INTO INCOMPLETE / COMPLETE
+    # SPLIT ITEMS
     # ========================================================
 
     incomplete = [
@@ -647,7 +647,7 @@ def shopping_list_page(user):
     ]
 
     # ========================================================
-    # TO BUY
+    # ITEMS TO BUY
     # ========================================================
 
     if incomplete:
@@ -658,33 +658,30 @@ def shopping_list_page(user):
 
         for item in incomplete:
 
-            col1, col2 = st.columns([6, 1])
+            col1, col2 = st.columns(
+                [6, 1]
+            )
 
             with col1:
 
                 checked = st.checkbox(
                     item["name"],
-                    value=False,
-                    key=f"shopping_{item['id']}"
+                    key=f"shopping_to_buy_{item['id']}"
                 )
 
                 if checked:
 
-                    # ------------------------------------------------
                     # Mark shopping item as completed
-                    # ------------------------------------------------
-
                     update_shopping_item(
                         item["id"],
                         user_id,
                         True
                     )
 
-                    # ------------------------------------------------
                     # Restore the exact kitchen item
-                    # ------------------------------------------------
-
-                    inventory_id = item.get("inventory_id")
+                    inventory_id = item.get(
+                        "inventory_id"
+                    )
 
                     if inventory_id is not None:
 
@@ -694,19 +691,17 @@ def shopping_list_page(user):
                             True
                         )
 
-                        # ------------------------------------------------
-                        # IMPORTANT:
-                        # Reset Streamlit's remembered checkbox state
-                        # ------------------------------------------------
-
-                        inventory_key = f"inventory_{inventory_id}"
+                        # Forget Streamlit's old
+                        # kitchen checkbox state
+                        inventory_key = (
+                            f"inventory_{inventory_id}"
+                        )
 
                         if inventory_key in st.session_state:
-                            del st.session_state[inventory_key]
 
-                    # ------------------------------------------------
-                    # Refresh the app
-                    # ------------------------------------------------
+                            del st.session_state[
+                                inventory_key
+                            ]
 
                     st.rerun()
 
@@ -725,8 +720,60 @@ def shopping_list_page(user):
                     st.rerun()
 
     # ========================================================
-    # COMPLETED
+    # COMPLETED ITEMS
     # ========================================================
+
+    if completed:
+
+        st.divider()
+
+        st.subheader("Completed")
+
+        for item in completed:
+
+            col1, col2 = st.columns(
+                [6, 1]
+            )
+
+            with col1:
+
+                # Use a completely different key namespace
+                st.checkbox(
+                    item["name"],
+                    value=True,
+                    disabled=True,
+                    key=f"shopping_completed_{item['id']}"
+                )
+
+            with col2:
+
+                if st.button(
+                    "🗑️",
+                    key=f"delete_completed_shopping_{item['id']}"
+                ):
+
+                    delete_shopping_item(
+                        item["id"],
+                        user_id
+                    )
+
+                    st.rerun()
+
+        # ====================================================
+        # CLEAR COMPLETED
+        # ====================================================
+
+        st.divider()
+
+        if st.button(
+            "🧹 Clear completed",
+            key="clear_completed_shopping",
+            use_container_width=True
+        ):
+
+            clear_completed_items(user_id)
+
+            st.rerun()
 
     if completed:
 

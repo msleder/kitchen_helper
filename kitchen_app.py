@@ -19,6 +19,7 @@ st.set_page_config(
 
 @st.cache_resource
 def get_supabase():
+
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
 
@@ -35,11 +36,11 @@ supabase = get_supabase()
 if "user" not in st.session_state:
     st.session_state.user = None
 
-if "show_shopping_popup" not in st.session_state:
-    st.session_state.show_shopping_popup = False
-
 if "pending_item" not in st.session_state:
     st.session_state.pending_item = None
+
+if "show_shopping_popup" not in st.session_state:
+    st.session_state.show_shopping_popup = False
 
 
 # ============================================================
@@ -49,15 +50,21 @@ if "pending_item" not in st.session_state:
 def login_page():
 
     st.title("🏠 My Kitchen")
-    st.write("Your personal kitchen inventory.")
 
-    login_tab, signup_tab = st.tabs(
-        ["Log in", "Create account"]
+    st.write(
+        "Your personal kitchen inventory."
     )
 
-    # --------------------------------------------------------
+    login_tab, signup_tab = st.tabs(
+        [
+            "Log in",
+            "Create account"
+        ]
+    )
+
+    # ========================================================
     # LOGIN
-    # --------------------------------------------------------
+    # ========================================================
 
     with login_tab:
 
@@ -79,24 +86,32 @@ def login_page():
 
             try:
 
-                response = supabase.auth.sign_in_with_password({
-                    "email": email,
-                    "password": password
-                })
+                response = (
+                    supabase
+                    .auth
+                    .sign_in_with_password({
+                        "email": email,
+                        "password": password
+                    })
+                )
 
                 st.session_state.user = response.user
 
-                st.success("Logged in!")
+                st.success(
+                    "Logged in!"
+                )
 
                 st.rerun()
 
             except Exception as e:
 
-                st.error(f"Login failed: {e}")
+                st.error(
+                    f"Login failed: {e}"
+                )
 
-    # --------------------------------------------------------
-    # SIGN UP
-    # --------------------------------------------------------
+    # ========================================================
+    # CREATE ACCOUNT
+    # ========================================================
 
     with signup_tab:
 
@@ -118,10 +133,14 @@ def login_page():
 
             try:
 
-                response = supabase.auth.sign_up({
-                    "email": new_email,
-                    "password": new_password
-                })
+                response = (
+                    supabase
+                    .auth
+                    .sign_up({
+                        "email": new_email,
+                        "password": new_password
+                    })
+                )
 
                 if response.user:
 
@@ -144,7 +163,7 @@ def login_page():
 
 
 # ============================================================
-# KITCHEN DATABASE FUNCTIONS
+# INVENTORY FUNCTIONS
 # ============================================================
 
 def get_items(user_id):
@@ -161,7 +180,11 @@ def get_items(user_id):
     return response.data
 
 
-def add_item(user_id, name, location):
+def add_item(
+    user_id,
+    name,
+    location
+):
 
     (
         supabase
@@ -176,7 +199,11 @@ def add_item(user_id, name, location):
     )
 
 
-def update_item(item_id, user_id, available):
+def update_item(
+    item_id,
+    user_id,
+    available
+):
 
     (
         supabase
@@ -190,7 +217,10 @@ def update_item(item_id, user_id, available):
     )
 
 
-def delete_item(item_id, user_id):
+def delete_item(
+    item_id,
+    user_id
+):
 
     (
         supabase
@@ -203,7 +233,7 @@ def delete_item(item_id, user_id):
 
 
 # ============================================================
-# SHOPPING LIST DATABASE FUNCTIONS
+# SHOPPING LIST FUNCTIONS
 # ============================================================
 
 def get_shopping_items(user_id):
@@ -220,21 +250,34 @@ def get_shopping_items(user_id):
     return response.data
 
 
-def add_to_shopping_list(user_id, name):
+def add_to_shopping_list(
+    user_id,
+    name,
+    inventory_id
+):
 
-    # Don't add duplicates
+    # --------------------------------------------------------
+    # Don't create a duplicate unfinished shopping item
+    # --------------------------------------------------------
+
     existing = (
         supabase
         .table("shopping_list")
         .select("id")
         .eq("user_id", user_id)
-        .eq("name", name)
+        .eq("inventory_id", inventory_id)
         .eq("completed", False)
         .execute()
     )
 
     if existing.data:
+
         return
+
+
+    # --------------------------------------------------------
+    # Add item
+    # --------------------------------------------------------
 
     (
         supabase
@@ -242,6 +285,7 @@ def add_to_shopping_list(user_id, name):
         .insert({
             "user_id": user_id,
             "name": name,
+            "inventory_id": inventory_id,
             "completed": False
         })
         .execute()
@@ -294,156 +338,7 @@ def clear_completed_items(user_id):
 
 
 # ============================================================
-# SHOPPING LIST
-# ============================================================
-
-def shopping_list_page(user):
-
-    user_id = user.id
-
-    st.title("🛒 Shopping List")
-
-    items = get_shopping_items(user_id)
-
-    if not items:
-
-        st.info(
-            "Your shopping list is empty. "
-            "When you run out of something in your kitchen, "
-            "you can add it here."
-        )
-
-    else:
-
-        incomplete = [
-            item
-            for item in items
-            if not item["completed"]
-        ]
-
-        completed = [
-            item
-            for item in items
-            if item["completed"]
-        ]
-
-        # ----------------------------------------------------
-        # ITEMS STILL TO BUY
-        # ----------------------------------------------------
-
-        if incomplete:
-
-            st.subheader("To buy")
-
-            for item in incomplete:
-
-                col1, col2 = st.columns(
-                    [5, 1]
-                )
-
-                with col1:
-
-                    checked = st.checkbox(
-                        item["name"],
-                        value=False,
-                        key=f"shopping_{item['id']}"
-                    )
-
-                    if checked:
-
-                        update_shopping_item(
-                            item["id"],
-                            user_id,
-                            True
-                        )
-
-                        # Try to restore the kitchen item
-                        inventory_items = get_items(
-                            user_id
-                        )
-
-                        matching_items = [
-                            kitchen_item
-                            for kitchen_item in inventory_items
-                            if kitchen_item["name"].lower()
-                            == item["name"].lower()
-                        ]
-
-                        if matching_items:
-
-                            update_item(
-                                matching_items[0]["id"],
-                                user_id,
-                                True
-                            )
-
-                        st.rerun()
-
-                with col2:
-
-                    if st.button(
-                        "🗑️",
-                        key=f"delete_shopping_{item['id']}"
-                    ):
-
-                        delete_shopping_item(
-                            item["id"],
-                            user_id
-                        )
-
-                        st.rerun()
-
-        # ----------------------------------------------------
-        # COMPLETED
-        # ----------------------------------------------------
-
-        if completed:
-
-            st.divider()
-
-            st.subheader("Completed")
-
-            for item in completed:
-
-                col1, col2 = st.columns(
-                    [5, 1]
-                )
-
-                with col1:
-
-                    st.checkbox(
-                        item["name"],
-                        value=True,
-                        disabled=True,
-                        key=f"completed_{item['id']}"
-                    )
-
-                with col2:
-
-                    if st.button(
-                        "🗑️",
-                        key=f"delete_completed_{item['id']}"
-                    ):
-
-                        delete_shopping_item(
-                            item["id"],
-                            user_id
-                        )
-
-                        st.rerun()
-
-            if st.button(
-                "Clear completed",
-                use_container_width=True
-            ):
-
-                clear_completed_items(user_id)
-
-                st.rerun()
-
-
-# ============================================================
-# KITCHEN
+# KITCHEN PAGE
 # ============================================================
 
 def kitchen_page(user):
@@ -452,17 +347,24 @@ def kitchen_page(user):
 
     st.title("🥫 My Kitchen")
 
+    st.caption(
+        "Check an item when you have it. "
+        "Uncheck it when you run out."
+    )
+
     items = get_items(user_id)
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # ADD ITEM
-    # --------------------------------------------------------
+    # ========================================================
 
     with st.expander("➕ Add an item"):
 
         item_name = st.text_input(
             "Item name",
-            placeholder="e.g. Milk"
+            placeholder="e.g. Milk",
+            key="new_item_name"
         )
 
         location = st.selectbox(
@@ -471,7 +373,8 @@ def kitchen_page(user):
                 "Fridge",
                 "Cupboard",
                 "Freezer"
-            ]
+            ],
+            key="new_item_location"
         )
 
         if st.button(
@@ -499,19 +402,25 @@ def kitchen_page(user):
                     "Please enter an item name."
                 )
 
+
     st.divider()
 
-    # --------------------------------------------------------
-    # ORGANISE ITEMS BY LOCATION
-    # --------------------------------------------------------
+
+    # ========================================================
+    # LOCATION SECTIONS
+    # ========================================================
 
     locations = [
-        "Fridge",
-        "Cupboard",
-        "Freezer"
+        ("Fridge", "🧊 Fridge"),
+        ("Cupboard", "🗄️ Cupboard"),
+        ("Freezer", "❄️ Freezer")
     ]
 
-    for location in locations:
+
+    for location, display_name in locations:
+
+        st.subheader(display_name)
+
 
         location_items = [
             item
@@ -519,25 +428,26 @@ def kitchen_page(user):
             if item["location"] == location
         ]
 
-        st.subheader(
-            {
-                "Fridge": "🧊 Fridge",
-                "Cupboard": "🗄️ Cupboard",
-                "Freezer": "❄️ Freezer"
-            }[location]
-        )
 
         if not location_items:
 
-            st.caption("Nothing here yet.")
+            st.caption(
+                "Nothing here yet."
+            )
 
             continue
+
 
         for item in location_items:
 
             col1, col2 = st.columns(
                 [6, 1]
             )
+
+
+            # =================================================
+            # CHECKBOX
+            # =================================================
 
             with col1:
 
@@ -547,30 +457,38 @@ def kitchen_page(user):
                     key=f"inventory_{item['id']}"
                 )
 
-                # ------------------------------------------------
-                # ITEM WAS UNCHECKED
-                # ------------------------------------------------
+
+                # ---------------------------------------------
+                # SOMETHING CHANGED
+                # ---------------------------------------------
 
                 if checked != item["available"]:
 
+
+                    # =========================================
+                    # ITEM BECAME UNAVAILABLE
+                    # =========================================
+
                     if not checked:
 
-                        # Don't immediately update.
-                        # Instead, ask whether they want
-                        # to add it to the shopping list.
-
-                        st.session_state.pending_item = item
-
-                        st.session_state.show_shopping_popup = True
-
-                        # Update kitchen status
+                        # Update inventory first
                         update_item(
                             item["id"],
                             user_id,
                             False
                         )
 
+                        # Remember which item triggered this
+                        st.session_state.pending_item = item
+
+                        st.session_state.show_shopping_popup = True
+
                         st.rerun()
+
+
+                    # =========================================
+                    # ITEM BECAME AVAILABLE
+                    # =========================================
 
                     else:
 
@@ -581,6 +499,11 @@ def kitchen_page(user):
                         )
 
                         st.rerun()
+
+
+            # =================================================
+            # DELETE BUTTON
+            # =================================================
 
             with col2:
 
@@ -607,23 +530,34 @@ def shopping_popup(user):
 
         return
 
+
     item = st.session_state.pending_item
+
 
     if not item:
 
         return
 
+
     st.divider()
+
 
     st.warning(
         f"🛒 You're out of **{item['name']}**."
     )
 
+
     st.write(
         "Would you like to add it to your shopping list?"
     )
 
+
     col1, col2 = st.columns(2)
+
+
+    # ========================================================
+    # ADD
+    # ========================================================
 
     with col1:
 
@@ -634,17 +568,25 @@ def shopping_popup(user):
 
             add_to_shopping_list(
                 user.id,
-                item["name"]
+                item["name"],
+                item["id"]
             )
 
             st.session_state.show_shopping_popup = False
+
             st.session_state.pending_item = None
 
             st.success(
-                f"Added {item['name']} to your shopping list!"
+                f"Added {item['name']} "
+                "to your shopping list!"
             )
 
             st.rerun()
+
+
+    # ========================================================
+    # DON'T ADD
+    # ========================================================
 
     with col2:
 
@@ -654,26 +596,225 @@ def shopping_popup(user):
         ):
 
             st.session_state.show_shopping_popup = False
+
             st.session_state.pending_item = None
 
             st.rerun()
 
 
 # ============================================================
-# MAIN APP
+# SHOPPING LIST PAGE
+# ============================================================
+
+def shopping_list_page(user):
+
+    user_id = user.id
+
+    st.title("🛒 Shopping List")
+
+    st.caption(
+        "Things you need to buy."
+    )
+
+
+    items = get_shopping_items(user_id)
+
+
+    # ========================================================
+    # EMPTY LIST
+    # ========================================================
+
+    if not items:
+
+        st.info(
+            "Your shopping list is empty! 🎉"
+        )
+
+        return
+
+
+    # ========================================================
+    # SPLIT INTO INCOMPLETE / COMPLETE
+    # ========================================================
+
+    incomplete = [
+        item
+        for item in items
+        if not item["completed"]
+    ]
+
+
+    completed = [
+        item
+        for item in items
+        if item["completed"]
+    ]
+
+
+    # ========================================================
+    # TO BUY
+    # ========================================================
+
+    if incomplete:
+
+        st.subheader(
+            f"To buy ({len(incomplete)})"
+        )
+
+
+        for item in incomplete:
+
+            col1, col2 = st.columns(
+                [6, 1]
+            )
+
+
+            with col1:
+
+                checked = st.checkbox(
+                    item["name"],
+                    value=False,
+                    key=f"shopping_{item['id']}"
+                )
+
+
+                if checked:
+
+                    # -----------------------------------------
+                    # Mark shopping item completed
+                    # -----------------------------------------
+
+                    update_shopping_item(
+                        item["id"],
+                        user_id,
+                        True
+                    )
+
+
+                    # -----------------------------------------
+                    # Restore exact kitchen item
+                    # -----------------------------------------
+
+                    inventory_id = item.get(
+                        "inventory_id"
+                    )
+
+
+                    if inventory_id is not None:
+
+                        update_item(
+                            inventory_id,
+                            user_id,
+                            True
+                        )
+
+
+                    # -----------------------------------------
+                    # Refresh
+                    # -----------------------------------------
+
+                    st.rerun()
+
+
+            with col2:
+
+                if st.button(
+                    "🗑️",
+                    key=f"delete_shopping_{item['id']}"
+                ):
+
+                    delete_shopping_item(
+                        item["id"],
+                        user_id
+                    )
+
+                    st.rerun()
+
+
+    # ========================================================
+    # COMPLETED
+    # ========================================================
+
+    if completed:
+
+        st.divider()
+
+        st.subheader(
+            "Completed"
+        )
+
+
+        for item in completed:
+
+            col1, col2 = st.columns(
+                [6, 1]
+            )
+
+
+            with col1:
+
+                st.checkbox(
+                    item["name"],
+                    value=True,
+                    disabled=True,
+                    key=f"completed_{item['id']}"
+                )
+
+
+            with col2:
+
+                if st.button(
+                    "🗑️",
+                    key=f"delete_completed_{item['id']}"
+                ):
+
+                    delete_shopping_item(
+                        item["id"],
+                        user_id
+                    )
+
+                    st.rerun()
+
+
+        # ----------------------------------------------------
+        # CLEAR COMPLETED
+        # ----------------------------------------------------
+
+        st.divider()
+
+        if st.button(
+            "🧹 Clear completed",
+            use_container_width=True
+        ):
+
+            clear_completed_items(
+                user_id
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# MAIN APPLICATION
 # ============================================================
 
 def kitchen_app():
 
     user = st.session_state.user
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # SIDEBAR
-    # --------------------------------------------------------
+    # ========================================================
 
     with st.sidebar:
 
-        st.write("👤", user.email)
+        st.write(
+            f"👤 {user.email}"
+        )
+
+        st.divider()
+
 
         if st.button(
             "Log out",
@@ -686,9 +827,10 @@ def kitchen_app():
 
             st.rerun()
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # TABS
-    # --------------------------------------------------------
+    # ========================================================
 
     kitchen_tab, shopping_tab = st.tabs(
         [
@@ -697,11 +839,21 @@ def kitchen_app():
         ]
     )
 
+
+    # ========================================================
+    # KITCHEN TAB
+    # ========================================================
+
     with kitchen_tab:
 
         kitchen_page(user)
 
         shopping_popup(user)
+
+
+    # ========================================================
+    # SHOPPING TAB
+    # ========================================================
 
     with shopping_tab:
 
